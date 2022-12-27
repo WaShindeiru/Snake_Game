@@ -9,24 +9,46 @@ RED = (255, 0, 0)
 WIDTH = 800
 HEIGHT = 800
 BLOCK = 40
-
+DIRECTION_MATRIX = [
+[0, 5, 0, 2],
+[3, 1, 2, 1],
+[0, 4, 0, 3],
+[4, 1, 5, 1]]
 
 class Body(pygame.sprite.Sprite):
-    def __init__(self, x, y, x_, y_):
+    def __init__(self, x, y, direction, previous):
         super().__init__()
+        self.direction = direction 
+        self.previous = previous
 
-        self.image = pygame.image.load("./images/body.png").convert_alpha()
+        self.body_sprite = [pygame.image.load("./images/tile001.png").convert_alpha(),
+        pygame.image.load("./images/tile007.png").convert_alpha(),
+        pygame.image.load("./images/tile005.png").convert_alpha(),
+        pygame.image.load("./images/tile012.png").convert_alpha(),
+        pygame.image.load("./images/tile002.png").convert_alpha(),
+        pygame.image.load("./images/tile000.png").convert_alpha()]
+
+        self.tail_sprite = [pygame.image.load("./images/tile014.png").convert_alpha(),
+        pygame.image.load("./images/tile013.png").convert_alpha(),
+        pygame.image.load("./images/tile018.png").convert_alpha(),
+        pygame.image.load("./images/tile019.png").convert_alpha()]
+        self.image = self.body_sprite[0]
+
+        if self.previous != -1:
+            self.image = self.body_sprite[DIRECTION_MATRIX[self.direction][self.previous]]
+
+        else:
+            self.image = self.tail_sprite[self.direction]
+    
         self.rect = self.image.get_rect()
 
         self.rect.x = x
         self.rect.y = y
 
-        self.x_speed = x_
-        self.y_speed = y_
+    def update(self):
+        if self.previous == -1:
+            self.image = self.tail_sprite[self.direction]
 
-    # def update(self):
-    #     self.rect.x += self.x_speed
-    #     self.rect.y += self.y_speed
 
 
 class Head(pygame.sprite.Sprite):
@@ -36,23 +58,53 @@ class Head(pygame.sprite.Sprite):
         self.x_loc = 50
         self.y_loc = 50
 
-        self.image = pygame.image.load("./images/head.png").convert_alpha()
-        self.rect = self.image.get_rect(topleft=(self.x_loc, self.y_loc))
+        self.head_sprite = [pygame.image.load("./images/tile004.png").convert_alpha(),
+        pygame.image.load("./images/tile003.png").convert_alpha(), 
+        pygame.image.load("./images/tile008.png").convert_alpha(),
+        pygame.image.load("./images/tile009.png").convert_alpha()]
+
+        self.image = self.head_sprite[0]
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (self.x_loc, self.y_loc)
 
         self.x_speed = 50
         self.y_speed = 50
 
-        self.body_list = list()
+        self.body_queue = list()
         self.food = 0
+        self.direction = 0
 
-        self.previous_possision = (0, 0)
 
     def move_update(self,x,y):
         self.x_speed = x
         self.y_speed = y
 
     def update(self):
-        self.previous_possision = (self.rect.x, self.rect.y)
+        if self.x_speed > 0:
+            self.image = self.head_sprite[0]
+            self.direction = 0
+
+        elif self.x_speed < 0:
+            self.image = self.head_sprite[2]
+            self.direction = 2
+
+        elif self.y_speed < 0:
+            self.image = self.head_sprite[1]
+            self.direction = 1
+
+        elif self.y_speed > 0:
+            self.image = self.head_sprite[3]
+            self.direction = 3
+            
+        if self.body_queue:
+            self.body_queue.insert(0, Body(self.rect.x, self.rect.y, self.direction, self.body_queue[0].direction))
+        else:
+            self.body_queue.insert(0, Body(self.rect.x, self.rect.y, self.direction, -1))
+        while len(self.body_queue) > self.food:
+            self.body_queue.pop().kill()
+        if self.body_queue:
+            self.body_queue[-1].previous = -1
+
         self.rect.x += self.x_speed
         self.rect.y += self.y_speed
 
@@ -68,16 +120,11 @@ class Head(pygame.sprite.Sprite):
         elif self.rect.bottom > HEIGHT:
             self.rect.y = 0
 
-        for a in range(len(self.body_list)-2, -1, -1):
-            self.body_list[a+1].rect.topleft = self.body_list[a].rect.topleft
-
-        if self.body_list:
-            self.body_list[0].rect.topleft = self.previous_possision
-
     def feed(self):
         self.food += 1
+
         
-        self.body_list.append(Body(self.previous_possision[0], self.previous_possision[1], self.x_speed, self.y_speed))
+        # self.body_list.append(Body(self.previous_possision[0], self.previous_possision[1], self.x_speed, self.y_speed))
 
 
 class Apple(pygame.sprite.Sprite):
@@ -142,12 +189,16 @@ def main():
     
         # --- Game logic  should go here
         time = pygame.time.get_ticks()
-        time = time - 500*i
+        time = time - 200*i
         # print(time)
-        if time > 500:
+        if time > 200:
             # print(time)
             i = i + 1
             group.update()
+            if head.food > 0:
+                Body_group.add(head.body_queue[0])
+                group.add(head.body_queue[0])
+            Body_group.update()
 
         if apple_count == 0:
             apple_count = 1
@@ -161,8 +212,6 @@ def main():
                 fruit.find_new_home()
                 fruit_list.pop()
                 head.feed()
-                group.add(head.body_list[-1])
-                Body_group.add(head.body_list[-1])
 
         if pygame.sprite.spritecollide(head, Body_group, False):
             pygame.time.wait(5000)
